@@ -960,9 +960,16 @@ function genRelated(){
   }
   const conv = a * k;
   const res = isAdd ? conv + c : conv - c;
+  const who = pick(['Ali', 'Siti', 'Ben', 'Mei', 'Raju', 'Nora']);
+  const item = pick(['chocolate bar', 'pizza', 'cake', 'pie']);
+  const story = (fr) => isAdd
+    ? `${who} ate ${fr(a, ds)} of a ${item} in the morning and another ${fr(c, db)} of the ${item} in the afternoon. What fraction of the ${item} did ${who} eat altogether?`
+    : `${who} had ${fr(a, ds)} of a ${item}. ${who} ate ${fr(c, db)} of the ${item}. What fraction of the ${item} is left?`;
   return {
-    text: `${a}/${ds} ${isAdd ? '+' : '−'} ${c}/${db} = ?`,
-    html: `<p>The pieces are different sizes — <b>match them first</b>, then count!</p>
+    text: `${story((n, d) => `${n}/${d}`)} (${a}/${ds} ${isAdd ? '+' : '−'} ${c}/${db} = ?)`,
+    html: `<p>${story(frac)}</p>
+      <div class="eq-row">${frac(a, ds)}<span class="op">${isAdd ? '+' : '−'}</span>${frac(c, db)}<span class="op">=</span><span class="op">?</span></div>
+      <p>The pieces are different sizes — <b>match them first</b>, then count!</p>
       ${fbar(a, ds, { split: k, label: `${a}/${ds} with every piece cut into ${k} → ${db === 2 ? 'halves' : db + 'ths'}` })}
       <div class="eq-row">Step 1: ${frac(a, ds)}<span class="op">=</span><span class="frac"><span class="fn">${blank('bc')}</span><span class="fd">${db}</span></span></div>
       <div class="eq-row">Step 2: <span class="frac"><span class="fn">?</span><span class="fd">${db}</span></span><span class="op">${isAdd ? '+' : '−'}</span>${frac(c, db)}<span class="op">=</span>${fracBlank('bn','bd')}</div>`,
