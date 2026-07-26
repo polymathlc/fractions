@@ -287,7 +287,7 @@
 // offline) even if the Firebase CDN can't be reached; only the AI
 // features need it.
 // =====================================================================
-const APP_VERSION = 'v1.1.0';
+const APP_VERSION = 'v1.2.0';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAUSI3Uh28IeqASEp0JhH4QPaVt-O3meBo",
@@ -344,6 +344,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const pick = (arr) => arr[ri(0, arr.length - 1)];
+const shuffle = (arr) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = ri(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const gcd = (a, b) => b ? gcd(b, a % b) : a;
 
 const STORE_KEY = 'fractionQuest.v1';
@@ -982,10 +983,11 @@ const SKILLS = [
   { id: 'simplify', emoji: '🧩', title: 'Simplify',           blurb: 'Glue pieces to find the simplest form.' },
   { id: 'like',     emoji: '➕', title: 'Add & subtract (same pieces)', blurb: 'Same denominators — count the pieces.' },
   { id: 'related',  emoji: '🔧', title: 'Add & subtract (match first)', blurb: 'Different denominators — match the pieces, then count.' },
+  { id: 'addsub',   emoji: '📚', title: '20 word problems (+ and −)', blurb: 'A full set of 20 story questions: 10 with same-size pieces, 10 you must match first.' },
   { id: 'mixed',    emoji: '🎲', title: 'Mixed challenge',    blurb: 'A little bit of everything!' },
 ];
 
-let practice = null; // { skill, q, firstTry, answered }
+let practice = null; // { skill, q, firstTry, answered, queue?, done?, total? }
 
 function renderPracticeHome(){
   $('view').innerHTML = `
@@ -1005,16 +1007,41 @@ function renderPracticeHome(){
 }
 
 function startPractice(skillId){
-  practice = { skill: skillId, q: null, firstTry: true, answered: false };
+  practice = { skill: skillId, q: null, firstTry: true, answered: false, queue: null, done: 0, total: 0 };
+  if (skillId === 'addsub') {
+    practice.queue = shuffle(ADD_SUB_BANK.map((_, i) => i));
+    practice.total = ADD_SUB_BANK.length;
+  }
   nextPracticeQ();
 }
 function nextPracticeQ(){
   const s = practice.skill;
-  const gen = s === 'mixed' ? pick([genName, genEquiv, genSimplify, genLike, genRelated]) : GENERATORS[s];
-  practice.q = gen();
+  if (practice.queue) {
+    if (!practice.queue.length) { renderPracticeDone(); return; }
+    practice.q = bankQuestion(ADD_SUB_BANK[practice.queue.shift()]);
+    practice.done++;
+  } else {
+    const gen = s === 'mixed'
+      ? pick([genName, genEquiv, genSimplify, genLike, genRelated, () => bankQuestion(pick(ADD_SUB_BANK))])
+      : GENERATORS[s];
+    practice.q = gen();
+  }
   practice.firstTry = true;
   practice.answered = false;
   renderPracticeQ();
+}
+function renderPracticeDone(){
+  $('view').innerHTML = `
+    <div class="card" style="text-align:center;">
+      <h2>🎉 All ${ADD_SUB_BANK.length} questions done!</h2>
+      <p class="lede">You worked right through the whole set of addition and subtraction problems — same-size pieces AND matched pieces. That's the hardest fraction skill in Primary 3!</p>
+      <div class="eq-row">⭐ ${progress.skillStars['addsub'] || 0} stars earned from this set</div>
+      <div class="btn-row">
+        <button class="btn btn-green" onclick="startPractice('addsub')">🔁 Shuffle and go again</button>
+        <button class="btn btn-ghost" onclick="goTab('practice')">← All skills</button>
+      </div>
+    </div>`;
+  window.scrollTo({ top: 0 });
 }
 function renderPracticeQ(){
   const q = practice.q;
@@ -1025,10 +1052,11 @@ function renderPracticeQ(){
         <h2 style="margin:0;">${skill.emoji} ${skill.title}</h2>
         <button class="btn btn-ghost" onclick="goTab('practice')">← Skills</button>
       </div>
+      ${practice.total ? `<p class="lede" style="margin:-8px 0 14px; font-weight:800;">Question ${practice.done} of ${practice.total}</p>` : ''}
       ${q.html}
       <div class="btn-row">
         <button class="btn btn-blue" id="pCheckBtn" onclick="checkPractice()">Check my answer</button>
-        <button class="btn btn-soft" id="pNextBtn" onclick="nextPracticeQ()" style="display:none;">Next question →</button>
+        <button class="btn btn-soft" id="pNextBtn" onclick="nextPracticeQ()" style="display:none;">${practice.queue && !practice.queue.length ? 'Finish the set →' : 'Next question →'}</button>
       </div>
       <div class="feedback" id="pFeedback"></div>
       <div class="btn-row" id="pCoachRow" style="display:none;">
@@ -1211,6 +1239,99 @@ function genRelated(){
   };
 }
 const GENERATORS = { name: genName, equiv: genEquiv, simplify: genSimplify, like: genLike, related: genRelated };
+
+// ---------------------------------------------------------------
+// A fixed set of 20 add & subtract word problems (not random) —
+// 10 with same-size pieces, 10 where the pieces must be matched first.
+// Each spec: n1/d1 (+|−) n2/d2, one denominator a multiple of the other.
+// ---------------------------------------------------------------
+const ADD_SUB_BANK = [
+  // ---- same denominator: just count the pieces ----
+  { n1:3, d1:8, op:'+', n2:2, d2:8, story:(f)=>`Ali ate ${f(3,8)} of a pizza. His sister ate ${f(2,8)} of the same pizza. What fraction of the pizza did they eat altogether?` },
+  { n1:5, d1:9, op:'+', n2:2, d2:9, story:(f)=>`Siti painted ${f(5,9)} of a poster before recess and ${f(2,9)} of it after recess. What fraction of the poster has she painted?` },
+  { n1:7, d1:10, op:'−', n2:3, d2:10, story:(f)=>`A jug was ${f(7,10)} full of orange juice. Ben poured out ${f(3,10)} of the jug. What fraction of the jug is left?` },
+  { n1:4, d1:7, op:'+', n2:2, d2:7, story:(f)=>`Mei read ${f(4,7)} of her storybook on Monday and ${f(2,7)} of it on Tuesday. What fraction of the book has she read?` },
+  { n1:11, d1:12, op:'−', n2:5, d2:12, story:(f)=>`Raju had ${f(11,12)} of a chocolate bar. He gave ${f(5,12)} of the bar to his friend. What fraction of the bar does he have now?` },
+  { n1:2, d1:6, op:'+', n2:3, d2:6, story:(f)=>`Nora's cake is cut into 6 equal pieces. She serves ${f(2,6)} of the cake to her cousins and ${f(3,6)} to her neighbours. What fraction of the cake did she serve?` },
+  { n1:1, d1:5, op:'+', n2:3, d2:5, story:(f)=>`A garden is split into 5 equal plots. ${f(1,5)} of it is planted with tomatoes and ${f(3,5)} with beans. What fraction of the garden is planted?` },
+  { n1:3, d1:4, op:'−', n2:1, d2:4, story:(f)=>`There was ${f(3,4)} of an apple pie in the fridge. Aisha ate ${f(1,4)} of the pie. What fraction of the pie is left?` },
+  { n1:5, d1:8, op:'−', n2:3, d2:8, story:(f)=>`Wei Ming had ${f(5,8)} of a metre of ribbon. He used ${f(3,8)} of a metre to wrap a present. What fraction of a metre is left?` },
+  { n1:6, d1:10, op:'+', n2:3, d2:10, story:(f)=>`Priya filled ${f(6,10)} of her sticker page in the morning and ${f(3,10)} more at night. What fraction of the page is filled?` },
+  // ---- different denominators: match the pieces first ----
+  { n1:1, d1:2, op:'+', n2:1, d2:4, story:(f)=>`Kumar ate ${f(1,2)} of a pizza and his brother ate ${f(1,4)} of the same pizza. What fraction of the pizza did they eat altogether?` },
+  { n1:1, d1:3, op:'+', n2:1, d2:6, story:(f)=>`Siti ate ${f(1,3)} of a cake and Ali ate ${f(1,6)} of the same cake. What fraction of the cake did they eat altogether?` },
+  { n1:3, d1:4, op:'−', n2:1, d2:8, story:(f)=>`Ben had ${f(3,4)} of a chocolate bar. He ate ${f(1,8)} of the bar. What fraction of the bar is left?` },
+  { n1:2, d1:5, op:'+', n2:3, d2:10, story:(f)=>`A bottle was ${f(2,5)} full of water. Mei poured in another ${f(3,10)} of the bottle. What fraction of the bottle is filled now?` },
+  { n1:1, d1:2, op:'−', n2:1, d2:6, story:(f)=>`Nora had ${f(1,2)} of a watermelon. She gave ${f(1,6)} of the watermelon to her neighbour. What fraction of the watermelon is left?` },
+  { n1:2, d1:3, op:'+', n2:1, d2:9, story:(f)=>`Raju painted ${f(2,3)} of a fence, then painted another ${f(1,9)} of it. What fraction of the fence has he painted?` },
+  { n1:5, d1:6, op:'−', n2:1, d2:3, story:(f)=>`After dinner, ${f(5,6)} of Aisha's pie was left. Her family then ate ${f(1,3)} of the pie for supper. What fraction of the pie is left now?` },
+  { n1:3, d1:4, op:'+', n2:1, d2:12, story:(f)=>`A pizza is cut into 12 equal slices. Wei Ming ate ${f(3,4)} of the pizza and his sister ate ${f(1,12)} of it. What fraction of the pizza did they eat altogether?` },
+  { n1:7, d1:8, op:'−', n2:1, d2:2, story:(f)=>`A loaf of bread was ${f(7,8)} whole. Priya used ${f(1,2)} of the loaf to make sandwiches. What fraction of the loaf is left?` },
+  { n1:1, d1:4, op:'+', n2:5, d2:12, story:(f)=>`Kumar drank ${f(1,4)} of a bottle of milk in the morning and ${f(5,12)} of the bottle at night. What fraction of the bottle did he drink?` },
+];
+
+function bankQuestion(spec){
+  const { n1, d1, op, n2, d2, story } = spec;
+  const isAdd = op === '+';
+  const sign = isAdd ? '+' : '−';
+  const D = Math.max(d1, d2);
+  const plain = (n, d) => `${n}/${d}`;
+  const question = `<p>${story(frac)}</p>
+    <div class="eq-row">${frac(n1, d1)}<span class="op">${sign}</span>${frac(n2, d2)}<span class="op">=</span><span class="op">?</span></div>`;
+  const text = `${story(plain)} (${n1}/${d1} ${sign} ${n2}/${d2} = ?)`;
+  const simplerOk = (res) => (got) => {
+    if (got.bn != null && got.bd != null && got.bd !== 0 && got.bn * D === res * got.bd && gcd(got.bn, got.bd) === 1 && got.bd < D)
+      return `${got.bn}/${got.bd} is exactly right — you even gave the simplest form. Superstar! (${res}/${D} was also accepted.)`;
+    return null;
+  };
+
+  if (d1 === d2) {
+    const res = isAdd ? n1 + n2 : n1 - n2;
+    return {
+      text,
+      html: `${question}
+        <p>The pieces are already the <b>same size</b> — so just count them.</p>
+        ${fbar(n1, d1, { label: `${n1}/${d1}` })}
+        <div class="eq-row">${frac(n1, d1)}<span class="op">${sign}</span>${frac(n2, d2)}<span class="op">=</span>${fracBlank('bn','bd')}</div>`,
+      answers: { bn: res, bd: D },
+      praise: `${n1} ${sign} ${n2} = ${res} pieces, each still 1/${D} — so ${res}/${D}.`,
+      expected: `${n1}/${d1} ${sign} ${n2}/${d2} = ${res}/${D}`,
+      acceptEquivalent: simplerOk(res),
+      diagnose(got){
+        if (got.bd === d1 + d2) return `You ${isAdd ? 'added' : 'changed'} the bottoms! The bottom number is the <b>size</b> of the pieces, and ${isAdd ? 'adding' : 'taking away'} pieces never changes their size. Keep the bottom as <b>${D}</b> and only work on the tops.`;
+        if (got.bn === (isAdd ? n1 - n2 : n1 + n2)) return `Check the sign — this question is ${isAdd ? 'an addition (+)' : 'a subtraction (−)'}.`;
+        return `All the pieces are ${D}ths, so the bottom stays ${D}. Now just ${isAdd ? `count them all: ${n1} + ${n2}` : `take away: ${n1} − ${n2}`}.`;
+      }
+    };
+  }
+
+  // one fraction has bigger pieces — re-cut it so both match
+  const firstSmaller = d1 < d2;
+  const sn = firstSmaller ? n1 : n2, sd = firstSmaller ? d1 : d2;
+  const k = D / sd;
+  const conv = sn * k;
+  const res = isAdd ? conv + (firstSmaller ? n2 : n1) : (firstSmaller ? conv - n2 : n1 - conv);
+  const step2 = firstSmaller
+    ? `<span class="frac"><span class="fn">?</span><span class="fd">${D}</span></span><span class="op">${sign}</span>${frac(n2, d2)}`
+    : `${frac(n1, d1)}<span class="op">${sign}</span><span class="frac"><span class="fn">?</span><span class="fd">${D}</span></span>`;
+  return {
+    text,
+    html: `${question}
+      <p>The pieces are different sizes — <b>match them first</b>, then count!</p>
+      ${fbar(sn, sd, { split: k, label: `${sn}/${sd} with every piece cut into ${k} → ${D}ths` })}
+      <div class="eq-row">Step 1: ${frac(sn, sd)}<span class="op">=</span><span class="frac"><span class="fn">${blank('bc')}</span><span class="fd">${D}</span></span></div>
+      <div class="eq-row">Step 2: ${step2}<span class="op">=</span>${fracBlank('bn','bd')}</div>`,
+    answers: { bc: conv, bn: res, bd: D },
+    praise: `${sn}/${sd} = ${conv}/${D}, then ${firstSmaller ? `${conv} ${sign} ${n2}` : `${n1} ${sign} ${conv}`} = ${res} pieces of size 1/${D}.`,
+    expected: `${sn}/${sd} = ${conv}/${D}; answer ${res}/${D}`,
+    acceptEquivalent(got){ return got.bc === conv ? simplerOk(res)(got) : null; },
+    diagnose(got){
+      if (got.bc !== conv) return `Start with Step 1. Every piece of ${frac(sn, sd)} is cut into ${k}, so multiply the top and the bottom by ${k}: ${sn} × ${k} = ?`;
+      if (got.bd === d1 + d2 || got.bd === sd + D) return `You added the bottoms! Once the pieces match (all ${D}ths), their size stops changing — the bottom stays <b>${D}</b>. Only count the tops.`;
+      return `Step 1 is right! Every piece is now a ${D}th, so just ${isAdd ? 'count' : 'take away'}: ${firstSmaller ? `${conv} ${sign} ${n2}` : `${n1} ${sign} ${conv}`}.`;
+    }
+  };
+}
 
 // ---- AI Coach for a wrong practice answer ----
 async function askCoach(){
