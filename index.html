@@ -56,6 +56,14 @@
   .brand .logo{ font-size:2rem; }
   .brand h1{ font-size:1.5rem; color:var(--green-deep); }
   .brand .sub{ font-size:0.85rem; color:var(--muted); margin-top:2px; }
+  .polymath-logo{ height:48px; width:auto; max-width:190px; display:block; }
+  /* shown only if the logo image can't load (offline) */
+  .polymath-wordmark{
+    display:none; font-family:'Baloo 2','Nunito',sans-serif; font-weight:800;
+    font-size:1.05rem; line-height:1.15; color:var(--green-deep);
+  }
+  .polymath-wordmark small{ display:block; font-size:0.72rem; font-weight:600; color:var(--muted); }
+  .brand-sep{ width:1px; height:36px; background:var(--line); flex:none; }
   .star-pill{
     background: var(--amber-soft); border:1.5px solid #f3ddb5; color:#9a6a17;
     font-weight:800; padding: 8px 18px; border-radius:999px; font-size:1rem;
@@ -246,6 +254,11 @@
   .gbox span{ font-size:1.3rem; line-height:1.2; }
 
   @media (max-width:560px){
+    .brand{ gap:9px; }
+    .polymath-logo{ height:36px; max-width:130px; }
+    .brand-sep{ height:28px; }
+    .brand h1{ font-size:1.25rem; }
+    .brand .sub{ display:none; }
     .card{ padding: 22px 18px; }
     .eq-row{ font-size:1.15rem; }
     .blank{ width:50px; height:40px; font-size:1.05rem; }
@@ -258,6 +271,12 @@
 <header>
   <div class="header-inner">
     <div class="brand">
+      <img class="polymath-logo"
+           src="https://dl.dropboxusercontent.com/scl/fi/h40yjlyg8ldefwfaa3dib/polymath-logo-sticker.png?rlkey=o1ra4taqy79gt9t8u096v82zj"
+           alt="Polymath Learning Centre"
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+      <span class="polymath-wordmark">Polymath<small>Learning Centre</small></span>
+      <span class="brand-sep"></span>
       <div class="logo">🍰</div>
       <div>
         <h1>Fraction Quest</h1>
@@ -287,7 +306,7 @@
 // offline) even if the Firebase CDN can't be reached; only the AI
 // features need it.
 // =====================================================================
-const APP_VERSION = 'v1.2.0';
+const APP_VERSION = 'v1.3.0';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAUSI3Uh28IeqASEp0JhH4QPaVt-O3meBo",
