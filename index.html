@@ -213,10 +213,43 @@
     padding: 3px 10px; z-index:50;
   }
 
+  /* ---------- example gallery ---------- */
+  .ex-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap:14px; margin: 18px 0; }
+  .ex-card{
+    border:1.5px solid var(--line); border-radius:16px; padding: 14px 14px 16px;
+    background:#fbfdfc; text-align:center;
+  }
+  .ex-card .ex-fig{ display:flex; justify-content:center; align-items:center; min-height:76px; }
+  .ex-card .ex-fig .bar-wrap{ margin: 6px 0; gap:6px; }
+  .ex-card .ex-txt{ font-size:0.88rem; color:var(--muted); line-height:1.45; margin: 8px 0 6px; }
+  .ex-card .ex-ans{ font-weight:800; font-size:0.95rem; color:var(--green-deep); }
+  .ex-card .ex-ans .frac{ font-size:1.05rem; }
+  .ex-tag{
+    display:inline-block; font-size:0.72rem; font-weight:800; letter-spacing:.04em;
+    text-transform:uppercase; padding: 2px 10px; border-radius:999px; margin-bottom:6px;
+  }
+  .ex-tag.whole{ background:var(--green-soft); color:var(--green-deep); }
+  .ex-tag.group{ background:var(--blue-soft); color:var(--blue); }
+  .ex-tag.number{ background:var(--purple-soft); color:var(--purple); }
+
+  /* ---------- emoji sets / equal groups ---------- */
+  .eset{ display:flex; flex-wrap:wrap; gap:4px; justify-content:center; margin: 8px 0; }
+  .eitem{ padding: 2px 4px; border-radius:8px; line-height:1.2; }
+  .eitem.on{ background:var(--green-soft); box-shadow: inset 0 0 0 2px #bfe3cf; }
+  .eitem.dim{ opacity:.4; filter:grayscale(1); }
+  .gset{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin: 18px 0; }
+  .gbox{
+    border:2px dashed #b8cdc1; border-radius:14px; padding: 8px 10px; background:#fbfdfc;
+    display:flex; flex-wrap:wrap; gap:4px; justify-content:center; max-width:160px;
+  }
+  .gbox.on{ border-style:solid; border-color:var(--green); background:var(--green-soft); }
+  .gbox span{ font-size:1.3rem; line-height:1.2; }
+
   @media (max-width:560px){
     .card{ padding: 22px 18px; }
     .eq-row{ font-size:1.15rem; }
     .blank{ width:50px; height:40px; font-size:1.05rem; }
+    .ex-grid{ grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); }
   }
 </style>
 </head>
@@ -254,7 +287,7 @@
 // offline) even if the Firebase CDN can't be reached; only the AI
 // features need it.
 // =====================================================================
-const APP_VERSION = 'v1.0.0';
+const APP_VERSION = 'v1.1.0';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAUSI3Uh28IeqASEp0JhH4QPaVt-O3meBo",
@@ -336,8 +369,8 @@ function toast(msg){
 //   into k; glue g draws bold lines only every g pieces (grouping).
 // =====================================================================
 function fbar(num, den, opts = {}) {
-  const { split = 1, glue = 1, w = 360, h = 58, color = 'var(--shade)', label = null } = opts;
-  const r = 10, sw = 2;
+  const { split = 1, glue = 1, w = 360, h = 58, color = 'var(--shade)', label = null, round = 10 } = opts;
+  const r = round, sw = 2;
   let cells = '';
   const pieceW = w / den;
   for (let i = 0; i < num; i++) {
@@ -368,6 +401,58 @@ function fbar(num, den, opts = {}) {
     <rect x="0" y="0" width="${w}" height="${h}" rx="${r}" fill="none" stroke="#243932" stroke-width="${sw + 0.5}"/>
   </svg>${lbl}</div>`;
 }
+// Round "pizza / pie / cake" version of the same idea: den equal sectors, num shaded.
+function pie(num, den, opts = {}) {
+  const { size = 118, color = 'var(--shade)', label = null } = opts;
+  const c = size / 2, r = c - 3;
+  const step = (Math.PI * 2) / den;
+  const pt = (a) => [(c + r * Math.cos(a)).toFixed(2), (c + r * Math.sin(a)).toFixed(2)];
+  let sectors = '', lines = '';
+  if (num >= den) {
+    sectors = `<circle cx="${c}" cy="${c}" r="${r}" fill="${color}"/>`;
+  } else {
+    for (let i = 0; i < num; i++) {
+      const a0 = -Math.PI / 2 + i * step, a1 = a0 + step;
+      const [x0, y0] = pt(a0), [x1, y1] = pt(a1);
+      sectors += `<path d="M ${c} ${c} L ${x0} ${y0} A ${r} ${r} 0 ${step > Math.PI ? 1 : 0} 1 ${x1} ${y1} Z" fill="${color}"/>`;
+    }
+  }
+  if (den > 1) {
+    for (let i = 0; i < den; i++) {
+      const [x, y] = pt(-Math.PI / 2 + i * step);
+      lines += `<line x1="${c}" y1="${c}" x2="${x}" y2="${y}" stroke="#243932" stroke-width="1.6"/>`;
+    }
+  }
+  const lbl = label ? `<div class="bar-label">${label}</div>` : '';
+  return `<div class="bar-wrap"><svg class="fbar" viewBox="-2 -2 ${size + 4} ${size + 4}" width="${size}" role="img" aria-label="${num} out of ${den} equal slices shaded">
+    <circle cx="${c}" cy="${c}" r="${r}" fill="#eef5f0"/>
+    ${sectors}${lines}
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#243932" stroke-width="2.5"/>
+  </svg>${lbl}</div>`;
+}
+// A group of things: the first `num` items are the chosen ones.
+function emojiSet(total, num, on, off = null, opts = {}) {
+  const { size = '1.5rem', label = null } = opts;
+  let out = '';
+  for (let i = 0; i < total; i++) {
+    const isOn = i < num;
+    const cls = isOn ? 'on' : (off ? '' : 'dim');
+    out += `<span class="eitem ${cls}" style="font-size:${size}">${isOn ? on : (off || on)}</span>`;
+  }
+  const lbl = label ? `<div class="bar-label">${label}</div>` : '';
+  return `<div class="bar-wrap" style="gap:6px;"><div class="eset" role="img" aria-label="${num} out of ${total} chosen">${out}</div>${lbl}</div>`;
+}
+// A number shared into `den` equal groups; the first `num` groups are taken.
+function groupSet(total, den, num, emoji, opts = {}) {
+  const { label = null } = opts;
+  const per = total / den;
+  let boxes = '';
+  for (let g = 0; g < den; g++) {
+    boxes += `<div class="gbox ${g < num ? 'on' : ''}">${`<span>${emoji}</span>`.repeat(per)}</div>`;
+  }
+  const lbl = label ? `<div class="bar-label">${label}</div>` : '';
+  return `<div class="bar-wrap" style="gap:6px;"><div class="gset" role="img" aria-label="${total} shared into ${den} equal groups, ${num} groups taken">${boxes}</div>${lbl}</div>`;
+}
 function frac(n, d){ return `<span class="frac"><span class="fn">${n}</span><span class="fd">${d}</span></span>`; }
 function blank(id, w){ return `<input class="blank" id="${id}" inputmode="numeric" autocomplete="off" ${w ? `style="width:${w}px"` : ''}>`; }
 function fracBlank(idN, idD){ return `<span class="frac"><span class="fn">${blank(idN)}</span><span class="fd" style="padding-top:6px;">${blank(idD)}</span></span>`; }
@@ -396,7 +481,7 @@ function goTab(tab){
 // LEARN — five interactive lessons
 // =====================================================================
 const LESSONS = [
-  { id: 'what',    emoji: '🍫', title: 'What is a fraction?',        blurb: 'Equal pieces of one whole — what the top and bottom numbers really mean.' },
+  { id: 'what',    emoji: '🍫', title: 'What is a fraction?',        blurb: 'Equal pieces of one whole, of a group, and of a number — with 29 real-life examples.' },
   { id: 'split',   emoji: '✂️', title: 'The Magic Split',             blurb: 'Why multiplying the top AND bottom by the same number keeps a fraction equal.' },
   { id: 'glue',    emoji: '🧩', title: 'Gluing pieces (simplify)',    blurb: 'Why dividing the top AND bottom by the same number works — and what "simplest form" means.' },
   { id: 'samesize',emoji: '➕', title: 'Adding same-size pieces',     blurb: 'Add and subtract fractions with the same denominator — and why the bottom never changes.' },
@@ -491,9 +576,98 @@ function doQuickCheck(){
 // ---------------------------------------------------------------
 // Lesson 1 — What is a fraction?
 // ---------------------------------------------------------------
-const l1 = { den: 4, num: 3 };
+// Real-life examples, in three flavours:
+//   whole  — one thing cut into equal parts (pizza, pie, chocolate bar…)
+//   group  — a group of things, some of them chosen
+//   number — a fraction OF a number (share into equal groups, take some)
+const EXAMPLE_CATS = [
+  { id: 'all',    label: 'All examples' },
+  { id: 'whole',  label: '🍕 One whole thing' },
+  { id: 'group',  label: '🍎 A group of things' },
+  { id: 'number', label: '🔢 A fraction of a number' },
+];
+const FRACTION_EXAMPLES = [
+  // ---- one whole thing cut into equal pieces ----
+  { cat:'whole', txt:'A <b>pizza</b> is cut into 8 equal slices. You eat 3 slices.',
+    ans:()=>`you ate ${frac(3,8)} of the pizza`, fig:()=>pie(3,8) },
+  { cat:'whole', txt:'An <b>apple pie</b> is cut into 6 equal slices. Dad takes 1 slice.',
+    ans:()=>`Dad took ${frac(1,6)} of the pie`, fig:()=>pie(1,6,{ color:'var(--shade-2)' }) },
+  { cat:'whole', txt:'A <b>chocolate bar</b> has 12 equal squares. You snap off 5.',
+    ans:()=>`you took ${frac(5,12)} of the bar`, fig:()=>fbar(5,12,{ w:170, h:34, round:8 }) },
+  { cat:'whole', txt:'A <b>birthday cake</b> is cut into 4 equal pieces. 3 pieces are still on the plate.',
+    ans:()=>`${frac(3,4)} of the cake is left`, fig:()=>pie(3,4) },
+  { cat:'whole', txt:'A <b>watermelon</b> is cut into 10 equal slices. 7 slices are shared out.',
+    ans:()=>`${frac(7,10)} of the watermelon was shared`, fig:()=>pie(7,10,{ color:'var(--shade-2)' }) },
+  { cat:'whole', txt:'A <b>loaf of bread</b> is cut into 8 equal slices. 5 are toasted.',
+    ans:()=>`${frac(5,8)} of the loaf is toasted`, fig:()=>fbar(5,8,{ w:170, h:34, round:8 }) },
+  { cat:'whole', txt:'A <b>ribbon</b> 1 metre long is cut into 5 equal pieces. You use 2 pieces.',
+    ans:()=>`you used ${frac(2,5)} of the ribbon`, fig:()=>fbar(2,5,{ w:170, h:26, round:6, color:'var(--shade-2)' }) },
+  { cat:'whole', txt:'A <b>glass of juice</b> is filled to 3 of its 4 equal marks.',
+    ans:()=>`the glass is ${frac(3,4)} full`, fig:()=>fbar(3,4,{ w:170, h:34, round:8 }) },
+  { cat:'whole', txt:'An <b>orange</b> splits into 10 equal segments. You eat 4 of them.',
+    ans:()=>`you ate ${frac(4,10)} of the orange`, fig:()=>pie(4,10,{ color:'var(--shade-2)' }) },
+  { cat:'whole', txt:'A <b>waffle</b> is cut into 6 equal parts. Your sister eats 2 parts.',
+    ans:()=>`she ate ${frac(2,6)} of the waffle`, fig:()=>pie(2,6) },
+  { cat:'whole', txt:'A sheet of <b>paper</b> is folded into 4 equal parts. You colour 1 part.',
+    ans:()=>`${frac(1,4)} of the paper is coloured`, fig:()=>fbar(1,4,{ w:170, h:34, round:8 }) },
+  { cat:'whole', txt:'One <b>hour</b> is split into 4 quarters. A lesson lasts 15 minutes.',
+    ans:()=>`the lesson is ${frac(1,4)} of an hour`, fig:()=>pie(1,4,{ color:'var(--shade-2)' }) },
+
+  // ---- a group of things ----
+  { cat:'group', txt:'There are 12 <b>apples</b> in a basket. 4 of them are green.',
+    ans:()=>`${frac(4,12)} of the apples are green`, fig:()=>emojiSet(12,4,'🍏','🍎',{ size:'1.15rem' }) },
+  { cat:'group', txt:'A tank holds 10 <b>fish</b>. 3 of them are gold.',
+    ans:()=>`${frac(3,10)} of the fish are gold`, fig:()=>emojiSet(10,3,'🐠','🐟',{ size:'1.15rem' }) },
+  { cat:'group', txt:'There are 8 <b>balls</b> in the store room. 5 are footballs.',
+    ans:()=>`${frac(5,8)} of the balls are footballs`, fig:()=>emojiSet(8,5,'⚽','🏀',{ size:'1.15rem' }) },
+  { cat:'group', txt:'15 <b>chicks</b> hatch on the farm. 6 of them are fluffy yellow.',
+    ans:()=>`${frac(6,15)} of the chicks are yellow`, fig:()=>emojiSet(15,6,'🐤','🐣',{ size:'1.05rem' }) },
+  { cat:'group', txt:'A jar has 20 <b>sweets</b>. 9 of them are strawberry.',
+    ans:()=>`${frac(9,20)} of the sweets are strawberry`, fig:()=>emojiSet(20,9,'🍬','🍭',{ size:'1rem' }) },
+  { cat:'group', txt:'10 <b>balloons</b> are tied to a chair. 3 are red.',
+    ans:()=>`${frac(3,10)} of the balloons are red`, fig:()=>emojiSet(10,3,'🔴','🔵',{ size:'1.15rem' }) },
+
+  // ---- a fraction OF a number ----
+  { cat:'number', txt:'<b>Half of 10 sweets.</b> Share 10 into 2 equal groups, take 1 group.',
+    ans:()=>`${frac(1,2)} of 10 = <b>5</b>`, fig:()=>emojiSet(10,5,'🍬','🍬',{ size:'1.15rem' }) },
+  { cat:'number', txt:'<b>One third of 12 apples.</b> Share 12 into 3 equal groups, take 1 group.',
+    ans:()=>`${frac(1,3)} of 12 = <b>4</b>`, fig:()=>emojiSet(12,4,'🍎','🍎',{ size:'1.15rem' }) },
+  { cat:'number', txt:'<b>A quarter of 20 stars.</b> Share 20 into 4 equal groups, take 1 group.',
+    ans:()=>`${frac(1,4)} of 20 = <b>5</b>`, fig:()=>emojiSet(20,5,'⭐','⭐',{ size:'1rem' }) },
+  { cat:'number', txt:'<b>Two thirds of 9 cookies.</b> Share 9 into 3 groups of 3, take 2 groups.',
+    ans:()=>`${frac(2,3)} of 9 = <b>6</b>`, fig:()=>emojiSet(9,6,'🍪','🍪',{ size:'1.15rem' }) },
+  { cat:'number', txt:'<b>Three quarters of 8 marbles.</b> Share 8 into 4 groups of 2, take 3 groups.',
+    ans:()=>`${frac(3,4)} of 8 = <b>6</b>`, fig:()=>emojiSet(8,6,'🔵','🔵',{ size:'1.15rem' }) },
+  { cat:'number', txt:'<b>One fifth of 15 fish.</b> Share 15 into 5 groups of 3, take 1 group.',
+    ans:()=>`${frac(1,5)} of 15 = <b>3</b>`, fig:()=>emojiSet(15,3,'🐟','🐟',{ size:'1.05rem' }) },
+  { cat:'number', txt:'<b>Two fifths of 20 pencils.</b> Share 20 into 5 groups of 4, take 2 groups.',
+    ans:()=>`${frac(2,5)} of 20 = <b>8</b>`, fig:()=>emojiSet(20,8,'✏️','✏️',{ size:'1rem' }) },
+  { cat:'number', txt:'<b>Three eighths of 16 seats.</b> Share 16 into 8 groups of 2, take 3 groups.',
+    ans:()=>`${frac(3,8)} of 16 = <b>6</b>`, fig:()=>emojiSet(16,6,'💺','💺',{ size:'1rem' }) },
+  { cat:'number', txt:'<b>Half of $6.</b> Share $6 into 2 equal parts, take 1 part.',
+    ans:()=>`${frac(1,2)} of $6 = <b>$3</b>`, fig:()=>emojiSet(6,3,'💵','💵',{ size:'1.3rem' }) },
+  { cat:'number', txt:'<b>Three quarters of 60 minutes.</b> 60 ÷ 4 = 15, then 15 × 3.',
+    ans:()=>`${frac(3,4)} of an hour = <b>45 min</b>`, fig:()=>fbar(3,4,{ w:170, h:34, round:8, color:'var(--shade-2)' }) },
+  { cat:'number', txt:'<b>One sixth of 18 stickers.</b> Share 18 into 6 groups of 3, take 1 group.',
+    ans:()=>`${frac(1,6)} of 18 = <b>3</b>`, fig:()=>emojiSet(18,3,'🌟','🌟',{ size:'1rem' }) },
+];
+
+const l1 = { den: 4, num: 3, cat: 'all' };
+const lof = { total: 12, den: 3, num: 1 };
+const lofDens = () => [2,3,4,5,6].filter(d => lof.total % d === 0);
+
+function exampleCard(ex){
+  return `
+    <div class="ex-card">
+      <span class="ex-tag ${ex.cat}">${ex.cat === 'whole' ? 'one whole' : ex.cat === 'group' ? 'a group' : 'of a number'}</span>
+      <div class="ex-fig">${ex.fig()}</div>
+      <div class="ex-txt">${ex.txt}</div>
+      <div class="ex-ans">→ ${ex.ans()}</div>
+    </div>`;
+}
+
 function renderL1(L){
-  const steps = [0,1,2];
+  const steps = [0,1,2,3,4,5];
   let body = '';
   if (lessonState.step === 0) {
     body = `
@@ -528,10 +702,42 @@ function renderL1(L){
       ${fbar(1, 4, { label: '4 EQUAL pieces — now the shaded piece really is ¼ ✅' })}
       <div class="warn"><b>Watch out:</b> a fraction only makes sense when every piece is the <b>same size</b>. Always ask: "are the pieces equal?"</div>
       ${nextBtn()}`;
-  } else {
+  } else if (lessonState.step === 2) {
+    const shown = l1.cat === 'all' ? FRACTION_EXAMPLES : FRACTION_EXAMPLES.filter(e => e.cat === l1.cat);
+    body = `
+      <h3>Fractions are everywhere — ${FRACTION_EXAMPLES.length} examples</h3>
+      <p>A fraction is not only about chocolate bars! Anything you can split into <b>equal</b> parts can be talked about with fractions — food, groups of things, money, even time. Tap a button to see one kind at a time.</p>
+      <div class="chip-row">
+        ${EXAMPLE_CATS.map(c => `<button class="chip ${c.id === l1.cat ? 'active' : ''}" onclick="l1SetCat('${c.id}')">${c.label}</button>`).join('')}
+      </div>
+      <p style="text-align:center; color:var(--muted); font-size:0.9rem;">Showing <b>${shown.length}</b> of ${FRACTION_EXAMPLES.length} examples</p>
+      <div class="ex-grid">${shown.map(exampleCard).join('')}</div>
+      <div class="idea"><b>Spot the pattern:</b> every single example does the same two things — split something into <b>equal</b> parts (that's the bottom number), then take some of those parts (that's the top number). The "something" can be one pizza 🍕, or a whole group of 20 sweets 🍬.</div>
+      ${nextBtn()}`;
+  } else if (lessonState.step === 3) {
+    const { total, den, num } = lof;
+    const per = total / den;
+    const ans = per * num;
+    body = `
+      <h3>A fraction OF a number</h3>
+      <p>What is ${frac(num, den)} of ${total} sweets? Don't cut the sweets up! Instead, <b>share them equally</b> into ${den} groups, then take ${num} group${num > 1 ? 's' : ''}. Try changing the numbers:</p>
+      <div class="chip-row"><span style="align-self:center; font-weight:700; color:var(--muted);">How many altogether:</span>
+        ${[8,10,12,20].map(t => `<button class="chip ${t === total ? 'active' : ''}" onclick="lofSetTotal(${t})">${t}</button>`).join('')}
+      </div>
+      <div class="chip-row"><span style="align-self:center; font-weight:700; color:var(--muted);">Share into:</span>
+        ${lofDens().map(d => `<button class="chip ${d === den ? 'active' : ''}" onclick="lofSetDen(${d})">${d} equal groups</button>`).join('')}
+      </div>
+      <div class="chip-row"><span style="align-self:center; font-weight:700; color:var(--muted);">Take:</span>
+        ${Array.from({length: den}, (_, i) => i + 1).map(n => `<button class="chip ${n === num ? 'active' : ''}" onclick="lofSetNum(${n})">${n} group${n > 1 ? 's' : ''}</button>`).join('')}
+      </div>
+      ${groupSet(total, den, num, '🍬', { label: `${total} shared into ${den} equal groups → ${per} in each group. Take ${num} → ${ans} sweets.` })}
+      <div class="eq-row">${frac(num, den)} of ${total}<span class="op">=</span>${total} ÷ ${den}${num > 1 ? ` × ${num}` : ''}<span class="op">=</span><b style="color:var(--green-deep);">${ans}</b></div>
+      <div class="idea"><b>Key idea:</b> "of" means the same thing as before — the <b>bottom</b> number says how many <b>equal groups</b> to share into, and the <b>top</b> number says how many of those groups to take. So ${frac(num, den)} of ${total} is ${ans}. It's the same fraction idea, just with a number instead of a pizza.</div>
+      ${nextBtn()}`;
+  } else if (lessonState.step === 4) {
     body = quickCheckHtml({
       html: `
-        <h3>Quick check</h3>
+        <h3>Quick check 1 — one whole thing</h3>
         <p>Write the fraction shown by this picture:</p>
         ${fbar(5, 8)}
         <div class="eq-row">shaded part = ${fracBlank('qc1n','qc1d')}</div>`,
@@ -539,11 +745,32 @@ function renderL1(L){
       feedbackGood: '5 shaded pieces out of 8 equal pieces — that is 5/8!',
       feedbackBad: 'Top = how many pieces are shaded. Bottom = how many equal pieces altogether.'
     });
+  } else {
+    body = quickCheckHtml({
+      html: `
+        <h3>Quick check 2 — a fraction of a number</h3>
+        <p>There are 20 sweets in a jar. ${frac(1,4)} of them are strawberry. How many strawberry sweets are there?</p>
+        ${emojiSet(20, 0, '🍬', '🍬', { size: '1.2rem', label: '20 sweets — share them into 4 equal groups' })}
+        <div class="eq-row">${frac(1,4)} of 20<span class="op">=</span>${blank('qc1b')}<span style="font-size:1rem; font-weight:700; color:var(--muted);">sweets</span></div>`,
+      answers: { qc1b: 5 },
+      feedbackGood: '20 shared into 4 equal groups gives 5 in each group — so 1/4 of 20 = 5!',
+      feedbackBad: 'The bottom number is 4, so share the 20 sweets into 4 equal groups. How many sweets are in one group?'
+    });
   }
   $('view').innerHTML = lessonShell(L, steps, body);
 }
 function l1SetDen(d){ l1.den = d; if (l1.num >= d) l1.num = d - 1; renderLesson(); }
 function l1SetNum(n){ l1.num = n; renderLesson(); }
+function l1SetCat(c){ l1.cat = c; renderLesson(); }
+function lofSetTotal(t){
+  lof.total = t;
+  const ds = lofDens();
+  if (!ds.includes(lof.den)) lof.den = ds[0];
+  if (lof.num > lof.den) lof.num = lof.den;
+  renderLesson();
+}
+function lofSetDen(d){ lof.den = d; if (lof.num > d) lof.num = d; renderLesson(); }
+function lofSetNum(n){ lof.num = n; renderLesson(); }
 
 // ---------------------------------------------------------------
 // Lesson 2 — The Magic Split (equivalent fractions, why × works)
@@ -739,7 +966,7 @@ function renderL5(L){
 function l5Split(){ l5.split = true; renderLesson(); }
 
 const LESSON_RENDERERS = {
-  what:     { steps: 3, render: renderL1 },
+  what:     { steps: 6, render: renderL1 },
   split:    { steps: 4, render: renderL2 },
   glue:     { steps: 3, render: renderL3 },
   samesize: { steps: 3, render: renderL4 },
@@ -1194,6 +1421,10 @@ window.nextLessonStep = nextLessonStep;
 window.doQuickCheck = doQuickCheck;
 window.l1SetDen = l1SetDen;
 window.l1SetNum = l1SetNum;
+window.l1SetCat = l1SetCat;
+window.lofSetTotal = lofSetTotal;
+window.lofSetDen = lofSetDen;
+window.lofSetNum = lofSetNum;
 window.l2SetK = l2SetK;
 window.l2SetFrac = l2SetFrac;
 window.l3SetG = l3SetG;
