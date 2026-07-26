@@ -133,6 +133,19 @@
   .bar-wrap{ display:flex; flex-direction:column; align-items:center; gap:14px; margin: 18px 0; }
   .bar-label{ font-size:0.9rem; color:var(--muted); font-weight:700; }
   svg.fbar{ max-width:100%; height:auto; display:block; }
+  /* the cut: dotted while it travels down, solid once the piece is cut */
+  .split-line{
+    stroke:#243932; stroke-width:1.4; stroke-dasharray:4 4; opacity:.55;
+    transition: stroke-width .25s ease, opacity .25s ease;
+  }
+  .fbar-split.cut .split-line{ stroke-dasharray:none; stroke-width:1.8; opacity:1; }
+  /* content that waits for the cut to finish before sliding in */
+  .reveal-later{ display:none; }
+  .reveal-later.shown{ display:block; animation: fadeUp .4s ease both; }
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce){
+    .reveal-later.shown{ animation:none; }
+  }
 
   /* ---------- buttons ---------- */
   .btn{
@@ -306,7 +319,7 @@
 // offline) even if the Firebase CDN can't be reached; only the AI
 // features need it.
 // =====================================================================
-const APP_VERSION = 'v1.3.0';
+const APP_VERSION = 'v1.4.0';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAUSI3Uh28IeqASEp0JhH4QPaVt-O3meBo",
@@ -389,8 +402,9 @@ function toast(msg){
 //   into k; glue g draws bold lines only every g pieces (grouping).
 // =====================================================================
 function fbar(num, den, opts = {}) {
-  const { split = 1, glue = 1, w = 360, h = 58, color = 'var(--shade)', label = null, round = 10 } = opts;
+  const { split = 1, glue = 1, w = 360, h = 58, color = 'var(--shade)', label = null, round = 10, animateSplit = true } = opts;
   const r = round, sw = 2;
+  const uid = fbar._id = (fbar._id || 0) + 1;
   let cells = '';
   const pieceW = w / den;
   for (let i = 0; i < num; i++) {
@@ -403,23 +417,56 @@ function fbar(num, den, opts = {}) {
     const strong = (glue > 1) ? (i % glue === 0) : true;
     lines += `<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="#243932" stroke-width="${strong ? sw : 1}" ${strong ? '' : 'stroke-dasharray="3 4" opacity="0.35"'}/>`;
   }
-  // sub-splits (dashed, inside every piece)
+  // sub-splits: the dotted cut. Drawn in their own group so the cut can be
+  // revealed downwards and then turned solid — see revealSplits().
+  let splitSvg = '';
   if (split > 1) {
     const subW = pieceW / split;
+    let sl = '';
     for (let i = 0; i < den; i++) {
       for (let j = 1; j < split; j++) {
         const x = (i * pieceW + j * subW).toFixed(2);
-        lines += `<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="#243932" stroke-width="1.4" stroke-dasharray="4 4" opacity="0.55"/>`;
+        sl += `<line class="split-line" x1="${x}" y1="0" x2="${x}" y2="${h}"/>`;
       }
     }
+    splitSvg = animateSplit
+      ? `<clipPath id="rv${uid}"><rect data-reveal="rv${uid}" x="-2" y="-2" width="${w + 4}" height="0"/></clipPath>
+         <g class="fbar-split" data-pending="1" data-clip="rv${uid}" data-full="${h + 4}" clip-path="url(#rv${uid})">${sl}</g>`
+      : `<g class="fbar-split">${sl}</g>`;
   }
   const lbl = label ? `<div class="bar-label">${label}</div>` : '';
   return `<div class="bar-wrap"><svg class="fbar" viewBox="-2 -2 ${w + 4} ${h + 4}" width="${w}" role="img" aria-label="${num} out of ${den} pieces shaded">
-    <clipPath id="c${fbar._id = (fbar._id || 0) + 1}"><rect x="0" y="0" width="${w}" height="${h}" rx="${r}"/></clipPath>
+    <clipPath id="c${uid}"><rect x="0" y="0" width="${w}" height="${h}" rx="${r}"/></clipPath>
     <rect x="0" y="0" width="${w}" height="${h}" rx="${r}" fill="#eef5f0"/>
-    <g clip-path="url(#c${fbar._id})">${cells}${lines}</g>
+    <g clip-path="url(#c${uid})">${cells}${lines}${splitSvg}</g>
     <rect x="0" y="0" width="${w}" height="${h}" rx="${r}" fill="none" stroke="#243932" stroke-width="${sw + 0.5}"/>
   </svg>${lbl}</div>`;
+}
+
+// =====================================================================
+// The cut animation
+//   A dotted line travels down the bar (the clip window grows downward,
+//   so nothing moves and nothing re-renders), and when it reaches the
+//   bottom the dots become solid lines — the piece has been cut.
+// =====================================================================
+const SPLIT_REVEAL_MS = 700;
+const noMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function revealSplits(root){
+  (root || document).querySelectorAll('g.fbar-split[data-pending]').forEach(g => {
+    delete g.dataset.pending;
+    const rect = g.closest('svg')?.querySelector(`[data-reveal="${g.dataset.clip}"]`);
+    const full = parseFloat(g.dataset.full) || 0;
+    if (!rect || noMotion()) { if (rect) rect.setAttribute('height', full); g.classList.add('cut'); return; }
+    const t0 = performance.now();
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / SPLIT_REVEAL_MS);
+      rect.setAttribute('height', (full * (1 - Math.pow(1 - p, 3))).toFixed(2));  // ease-out
+      if (p < 1) requestAnimationFrame(step);
+      else g.classList.add('cut');   // dots become real cuts
+    };
+    requestAnimationFrame(step);
+  });
 }
 // Round "pizza / pie / cake" version of the same idea: den equal sectors, num shaded.
 function pie(num, den, opts = {}) {
@@ -554,10 +601,12 @@ function nextLessonStep(){
     goTab('learn');
   } else { lessonState.step++; renderLesson(); }
 }
-function renderLesson(){
+// scroll = false when a chip changed something on the page the child is
+// already looking at — jumping to the top there feels like a page refresh.
+function renderLesson(scroll = true){
   const L = LESSONS[lessonState.idx];
   LESSON_RENDERERS[L.id].render(L);
-  window.scrollTo({ top: 0 });
+  if (scroll) window.scrollTo({ top: 0 });
 }
 const nextBtn = (label = 'Next →') => `<div class="btn-row"><button class="btn btn-green" onclick="nextLessonStep()">${label}</button></div>`;
 
@@ -779,18 +828,18 @@ function renderL1(L){
   }
   $('view').innerHTML = lessonShell(L, steps, body);
 }
-function l1SetDen(d){ l1.den = d; if (l1.num >= d) l1.num = d - 1; renderLesson(); }
-function l1SetNum(n){ l1.num = n; renderLesson(); }
-function l1SetCat(c){ l1.cat = c; renderLesson(); }
+function l1SetDen(d){ l1.den = d; if (l1.num >= d) l1.num = d - 1; renderLesson(false); }
+function l1SetNum(n){ l1.num = n; renderLesson(false); }
+function l1SetCat(c){ l1.cat = c; renderLesson(false); }
 function lofSetTotal(t){
   lof.total = t;
   const ds = lofDens();
   if (!ds.includes(lof.den)) lof.den = ds[0];
   if (lof.num > lof.den) lof.num = lof.den;
-  renderLesson();
+  renderLesson(false);
 }
-function lofSetDen(d){ lof.den = d; if (lof.num > d) lof.num = d; renderLesson(); }
-function lofSetNum(n){ lof.num = n; renderLesson(); }
+function lofSetDen(d){ lof.den = d; if (lof.num > d) lof.num = d; renderLesson(false); }
+function lofSetNum(n){ lof.num = n; renderLesson(false); }
 
 // ---------------------------------------------------------------
 // Lesson 2 — The Magic Split (equivalent fractions, why × works)
@@ -804,12 +853,12 @@ function renderL2(L){
     body = `
       <h3>Split every piece — the amount doesn't change!</h3>
       <p>Here is ${frac(n, d)} of a bar. Now cut <b>every</b> piece into smaller equal pieces. Does the shaded amount grow or shrink?</p>
-      ${fbar(n, d, { split: k, label: k === 1 ? `${n}/${d}` : `Every piece cut into ${k} → now ${n * k} small pieces are shaded out of ${d * k}` })}
-      <div class="chip-row"><span style="align-self:center; font-weight:700; color:var(--muted);">Cut every piece into:</span>
-        ${[1,2,3,4].map(kk => `<button class="chip ${kk === l2.k ? 'active' : ''}" onclick="l2SetK(${kk})">${kk === 1 ? 'no cut' : '×' + kk}</button>`).join('')}
+      <div id="l2bar">${fbar(n, d, { split: k, label: l2Label() })}</div>
+      <div class="chip-row" id="l2chips"><span style="align-self:center; font-weight:700; color:var(--muted);">Cut every piece into:</span>
+        ${[1,2,3,4].map(kk => `<button class="chip ${kk === l2.k ? 'active' : ''}" data-k="${kk}" onclick="l2SetK(${kk})">${kk === 1 ? 'no cut' : '×' + kk}</button>`).join('')}
       </div>
-      <div class="eq-row">${frac(n, d)}${k > 1 ? `<span class="op">=</span>${frac(`${n}×${k}`, `${d}×${k}`)}<span class="op">=</span>${frac(n * k, d * k)}` : ''}</div>
-      <div class="idea"><b>See it?</b> The shaded part <b>never moved</b>. We only drew extra lines. Cutting every piece into ${k > 1 ? k : 'k'} pieces makes the top <b>×${k > 1 ? k : 'k'}</b> AND the bottom <b>×${k > 1 ? k : 'k'}</b> — but the amount of chocolate is exactly the same. That's why ${frac(n, d)} ${k > 1 ? `= ${frac(n * k, d * k)}` : 'has many other names'}. We call them <b>equivalent fractions</b>.</div>
+      <div class="eq-row" id="l2eq">${l2EqHtml()}</div>
+      <div class="idea" id="l2idea">${l2IdeaHtml()}</div>
       <div class="chip-row"><span style="align-self:center; font-weight:700; color:var(--muted);">Try another fraction:</span>
         ${[[1,2],[2,3],[3,4]].map(([nn,dd]) => `<button class="chip ${nn === l2.n && dd === l2.d ? 'active' : ''}" onclick="l2SetFrac(${nn},${dd})">${nn}/${dd}</button>`).join('')}
       </div>
@@ -844,8 +893,31 @@ function renderL2(L){
   }
   $('view').innerHTML = lessonShell(L, steps, body);
 }
-function l2SetK(k){ l2.k = k; renderLesson(); }
-function l2SetFrac(n, d){ l2.n = n; l2.d = d; l2.k = 1; renderLesson(); }
+const l2Label = () => {
+  const { n, d, k } = l2;
+  return k === 1 ? `${n}/${d}` : `Every piece cut into ${k} → now ${n * k} small pieces are shaded out of ${d * k}`;
+};
+const l2EqHtml = () => {
+  const { n, d, k } = l2;
+  return `${frac(n, d)}${k > 1 ? `<span class="op">=</span>${frac(`${n}×${k}`, `${d}×${k}`)}<span class="op">=</span>${frac(n * k, d * k)}` : ''}`;
+};
+const l2IdeaHtml = () => {
+  const { n, d, k } = l2;
+  return `<b>See it?</b> The shaded part <b>never moved</b>. We only drew extra lines. Cutting every piece into ${k > 1 ? k : 'k'} pieces makes the top <b>×${k > 1 ? k : 'k'}</b> AND the bottom <b>×${k > 1 ? k : 'k'}</b> — but the amount of chocolate is exactly the same. That's why ${frac(n, d)} ${k > 1 ? `= ${frac(n * k, d * k)}` : 'has many other names'}. We call them <b>equivalent fractions</b>.`;
+};
+// Only the bar and its captions change — the block stays exactly where it
+// is and the new cut animates down it.
+function l2SetK(k){
+  if (l2.k === k) return;
+  l2.k = k;
+  const bar = $('l2bar');
+  if (!bar) { renderLesson(false); return; }
+  bar.innerHTML = fbar(l2.n, l2.d, { split: k, label: l2Label() });
+  document.querySelectorAll('#l2chips .chip').forEach(c => c.classList.toggle('active', +c.dataset.k === k));
+  $('l2eq').innerHTML = l2EqHtml();
+  $('l2idea').innerHTML = l2IdeaHtml();
+}
+function l2SetFrac(n, d){ l2.n = n; l2.d = d; l2.k = 1; renderLesson(false); }
 
 // ---------------------------------------------------------------
 // Lesson 3 — Gluing pieces (simplifying, why ÷ works)
@@ -890,7 +962,7 @@ function renderL3(L){
   }
   $('view').innerHTML = lessonShell(L, steps, body);
 }
-function l3SetG(g){ l3.g = g; renderLesson(); }
+function l3SetG(g){ l3.g = g; renderLesson(false); }
 
 // ---------------------------------------------------------------
 // Lesson 4 — Adding same-size pieces
@@ -960,14 +1032,17 @@ function renderL5(L){
   } else if (lessonState.step === 1) {
     body = `
       <h3>Split the half into quarters</h3>
-      <p>${l5.split ? 'Now every piece is a quarter — same size, so we can count them!' : 'Press the button to cut the half into quarters:'}</p>
-      ${fbar(1, 2, { split: l5.split ? 2 : 1, label: l5.split ? '1/2 = 2/4 (Magic Split: ×2 top and bottom)' : '1/2' })}
+      <p id="l5msg">${l5.split ? L5_DONE_MSG : 'Press the button and watch the cut come down the bar:'}</p>
+      <div id="l5bar">${fbar(1, 2, { split: l5.split ? 2 : 1, label: l5.split ? L5_CUT_LABEL : '1/2' })}</div>
       ${fbar(1, 4, { color: 'var(--shade-2)', label: '1/4' })}
-      ${l5.split ? `
+      <div class="btn-row" id="l5btn" ${l5.split ? 'style="display:none;"' : ''}>
+        <button class="btn btn-green" onclick="l5Split()">✂️ Split the half into quarters</button>
+      </div>
+      <div class="reveal-later ${l5.split ? 'shown' : ''}" id="l5after">
         <div class="eq-row">${frac(1,2)}<span class="op">+</span>${frac(1,4)}<span class="op">=</span>${frac(2,4)}<span class="op">+</span>${frac(1,4)}<span class="op">=</span>${frac(3,4)}</div>
         <div class="idea"><b>That's the whole secret</b> of adding fractions with different bottoms: it's not a rule to memorise — you're just re-cutting pieces until they're the same size, then counting. Subtraction is the same: ${frac(1,2)} − ${frac(1,4)} = ${frac(2,4)} − ${frac(1,4)} = ${frac(1,4)}.</div>
-        ${nextBtn()}`
-      : `<div class="btn-row"><button class="btn btn-green" onclick="l5Split()">✂️ Split the half into quarters</button></div>`}`;
+        ${nextBtn()}
+      </div>`;
   } else {
     body = quickCheckHtml({
       html: `
@@ -983,7 +1058,20 @@ function renderL5(L){
   }
   $('view').innerHTML = lessonShell(L, steps, body);
 }
-function l5Split(){ l5.split = true; renderLesson(); }
+const L5_DONE_MSG = 'Now every piece is a quarter — same size, so we can count them!';
+const L5_CUT_LABEL = '1/2 = 2/4 (Magic Split: ×2 top and bottom)';
+// Cut the bar where it stands, then bring in the working once the cut has
+// finished travelling down — so the child actually sees it happen.
+function l5Split(){
+  if (l5.split) return;
+  l5.split = true;
+  const bar = $('l5bar');
+  if (!bar) { renderLesson(false); return; }
+  bar.innerHTML = fbar(1, 2, { split: 2, label: L5_CUT_LABEL });
+  $('l5msg').textContent = L5_DONE_MSG;
+  $('l5btn').style.display = 'none';
+  setTimeout(() => $('l5after')?.classList.add('shown'), noMotion() ? 0 : SPLIT_REVEAL_MS + 120);
+}
 
 const LESSON_RENDERERS = {
   what:     { steps: 6, render: renderL1 },
@@ -1576,9 +1664,21 @@ window.askCoach = askCoach;
 window.openExplain = openExplain;
 window.sendExplain = sendExplain;
 
+// Any bar that appears anywhere — lesson, practice question, quick check,
+// "Teach the AI" picture — gets its cut animated as soon as it lands.
+const splitWatcher = new MutationObserver(() => {
+  if (splitWatcher._queued) return;
+  splitWatcher._queued = requestAnimationFrame(() => {
+    splitWatcher._queued = 0;
+    revealSplits($('view'));
+  });
+});
+splitWatcher.observe($('view'), { childList: true, subtree: true });
+
 $('versionBadge').textContent = APP_VERSION;
 renderStarCount();
 renderLearnHome();
+revealSplits($('view'));
 </script>
 </body>
 </html>
