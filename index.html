@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- No maximum-scale / user-scalable=no: iOS has ignored them since iOS 10, so
+     they never stopped the focus zoom they get added for — they only block
+     pinch-zoom for low-vision users on other browsers. Fields are 16px on
+     touch instead, which is what actually prevents iOS zooming into them. -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Fraction Quest — Learn Fractions (P3)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -266,6 +270,104 @@
   .gbox.on{ border-style:solid; border-color:var(--green); background:var(--green-soft); }
   .gbox span{ font-size:1.3rem; line-height:1.2; }
 
+  /* ---------- exam ---------- */
+  .exam-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .exam-tag{ font-size:0.85rem; font-weight:800; color:var(--muted); margin-top:3px; }
+  .exam-dots{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
+  .edot{
+    width:34px; height:34px; border-radius:10px; border:1.5px solid var(--line); background:var(--card);
+    font-family:'Baloo 2',sans-serif; font-weight:700; font-size:0.85rem; color:var(--muted);
+    cursor:pointer; flex:0 0 auto;
+  }
+  .edot.done{ border-color:#bfe3cf; background:var(--green-soft); color:var(--green-deep); }
+  .edot.active{ background:var(--green); border-color:var(--green); color:#fff; }
+  /* Finish / Next stay reachable without scrolling to the end of a long
+     question — solid, so nothing ghosts through from underneath. */
+  .exam-nav{
+    position:sticky; bottom:0; margin-top:20px; padding:12px 0 6px;
+    background:var(--card); box-shadow: 0 -10px 14px -10px rgba(36,57,50,0.22);
+  }
+  /* While a number is being typed, the on-screen keyboard has already taken
+     the bottom of the screen — a bar stuck above it would cover the answer
+     box itself, so it goes back to the end of the card. */
+  body.typing .exam-nav{ position:static; box-shadow:none; }
+
+  /* ---------- working area ---------- */
+  .work{ margin: 20px 0 4px; }
+  .work-toggle{ width:100%; }
+  .work-bar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin: 12px 0 8px; }
+  .work-tool{
+    width:44px; height:44px; border-radius:12px; flex:0 0 auto;
+    border:1.5px solid var(--line); background:var(--card); font-size:1.15rem; cursor:pointer;
+  }
+  .work-tool.active{ background:var(--green-soft); border-color:#bfe3cf; }
+  .work-hint{ font-size:0.8rem; color:var(--muted); font-weight:700; }
+  .work-pad-wrap{ border:2px dashed #b8cdc1; border-radius:14px; background:#fbfdfc; overflow:hidden; }
+  canvas.work-pad{
+    display:block; width:100%; aspect-ratio: 3 / 2;
+    max-height: calc(var(--vvh, 100vh) * 0.5);
+    /* the pad owns the gesture, so a stroke never scrolls the page… */
+    touch-action:none; overscroll-behavior:none;
+  }
+  /* …until an Apple Pencil shows up, after which fingers scroll and only the pencil writes */
+  canvas.work-pad.stylus{ touch-action: pan-y; }
+
+  /* ---------- exam results ---------- */
+  .res-score{ font-family:'Baloo 2',sans-serif; font-size:2.8rem; font-weight:800; color:var(--green-deep); line-height:1.1; }
+  .res-item{ border:1.5px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:12px; background:#fbfdfc; }
+  .res-item.ok{ border-color:#bfe3cf; background:var(--green-soft); }
+  .res-item.bad{ border-color:#f0cccc; background:var(--red-soft); }
+  .res-head{ font-weight:800; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+  .res-q{ font-size:0.92rem; margin:6px 0; color:var(--ink); }
+  .res-ans{ font-size:0.9rem; color:var(--muted); font-weight:700; }
+  .res-ans b{ color:var(--ink); }
+  .res-work{ margin-top:10px; }
+  .res-work img{ width:100%; max-width:340px; display:block; border:1px solid var(--line); border-radius:10px; background:#fff; }
+
+  /* ---------- touch devices: no sticky :hover, real press feedback ----------
+     iOS/iPadOS latches :hover onto whatever was tapped and holds it until
+     something else is tapped, so the last chip pressed kept looking chosen
+     next to the genuinely active one. Neutralise hover where the device
+     cannot hover, and give a pressed state in its place. */
+  @media (hover: none){
+    .tab-btn:hover{ border-color:var(--line); color:var(--muted); }
+    .tab-btn.active:hover{ border-color:var(--green); color:#fff; }
+    .chip:hover:not(:disabled){ border-color:var(--line); color:var(--muted); }
+    .chip.active:hover{ border-color:var(--green); color:#fff; }
+    .pick-card:hover{ border-color:var(--line); transform:none; }
+    .btn-green:hover:not(:disabled){ background:var(--green); }
+    .btn-blue:hover:not(:disabled){ background:var(--blue); }
+    .btn-soft:hover:not(:disabled){ background:var(--green-soft); }
+    .btn-ghost:hover{ color:var(--muted); border-color:var(--line); }
+
+    .btn:active:not(:disabled){ transform: translateY(1px); filter: brightness(0.96); }
+    .chip:active:not(:disabled), .tab-btn:active{ background:#eef5f0; }
+    .chip.active:active{ background:var(--green-deep); }
+    .pick-card:active, .edot:active, .work-tool:active, .lstep:active{ background:#eef5f0; }
+  }
+
+  /* ---------- touch ergonomics ----------
+     Apple's minimum comfortable target is 44px, and anything under 16px in a
+     field makes iOS zoom the whole page on focus and never zoom back. */
+  @media (pointer: coarse){
+    .btn{ min-height:44px; }
+    .tab-btn, .chip{ min-height:44px; display:inline-flex; align-items:center; justify-content:center; }
+    .lstep{ width:42px; height:42px; font-size:1rem; }
+    .edot{ width:42px; height:42px; font-size:0.95rem; }
+    .blank{ min-height:44px; font-size:16px; }
+    textarea.explain-input{ font-size:16px; }
+    .eitem{ padding:4px 6px; }
+  }
+
+  /* No grey iOS tap flash, and no text selection or magnifier callout when a
+     hand rests on the chrome. Content itself stays selectable. */
+  .btn, .chip, .tab-btn, .pick-card, .lstep, .edot, .work-tool{ -webkit-tap-highlight-color: transparent; }
+  header, nav.tabs, .lesson-steps, .exam-dots, .work-bar, .chip-row{
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+  }
+  /* Flicking a card's contents past its end used to chain into the page behind. */
+  .card, .ex-grid{ overscroll-behavior: contain; }
+
   @media (max-width:560px){
     .brand{ gap:9px; }
     .polymath-logo{ height:36px; max-width:130px; }
@@ -303,6 +405,7 @@
 <nav class="tabs">
   <button class="tab-btn active" data-tab="learn" onclick="goTab('learn')">📖 Learn</button>
   <button class="tab-btn" data-tab="practice" onclick="goTab('practice')">✏️ Practice</button>
+  <button class="tab-btn" data-tab="exam" onclick="goTab('exam')">📝 Exam</button>
   <button class="tab-btn" data-tab="explain" onclick="goTab('explain')">🤖 Teach the AI</button>
 </nav>
 
@@ -319,7 +422,7 @@
 // offline) even if the Firebase CDN can't be reached; only the AI
 // features need it.
 // =====================================================================
-const APP_VERSION = 'v1.4.0';
+const APP_VERSION = 'v1.5.0';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAUSI3Uh28IeqASEp0JhH4QPaVt-O3meBo",
@@ -540,6 +643,7 @@ function goTab(tab){
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   if (tab === 'learn') renderLearnHome();
   else if (tab === 'practice') renderPracticeHome();
+  else if (tab === 'exam') renderExamHome();
   else renderExplainHome();
   window.scrollTo({ top: 0 });
 }
@@ -1345,6 +1449,32 @@ function genRelated(){
     }
   };
 }
+function genOfNumber(){
+  const den = pick([2,3,4,5,6]);
+  const per = ri(2, 6);
+  const total = den * per;
+  const num = den === 2 ? 1 : ri(1, den - 1);
+  const ans = per * num;
+  const [who, thing, emoji] = pick([
+    ['Ali','stickers','⭐'], ['Siti','sweets','🍬'], ['Ben','marbles','🔵'],
+    ['Mei','cookies','🍪'], ['Raju','stamps','📮'], ['Nora','beads','🟣']
+  ]);
+  return {
+    text: `${who} has ${total} ${thing} and gives away ${num}/${den} of them. How many is that?`,
+    html: `<p>${who} has <b>${total} ${thing}</b>. ${who} gives away ${frac(num, den)} of them.<br>How many ${thing} is that?</p>
+      ${emojiSet(total, 0, emoji, emoji, { size: '1.2rem', label: `${total} ${thing} altogether` })}
+      <div class="eq-row">${frac(num, den)} of ${total}<span class="op">=</span>${blank('bx')}</div>`,
+    answers: { bx: ans },
+    praise: `${total} ÷ ${den} = ${per}${num > 1 ? `, then ${per} × ${num} = ${ans}` : ''}.`,
+    expected: `${num}/${den} of ${total} = ${ans}`,
+    diagnose(got){
+      if (got.bx === per && num > 1) return `That is ${frac(1, den)} of ${total}. You need <b>${num}</b> of those groups: ${per} × ${num}.`;
+      if (got.bx === total - ans) return `You worked out how many are <b>left</b>. The question asks how many were <b>given away</b>.`;
+      if (got.bx === total - den) return `Careful — the bottom number is not taken away. It says how many <b>equal groups</b> to share into.`;
+      return `Share the ${total} ${thing} into <b>${den}</b> equal groups (${total} ÷ ${den} = ?), then take ${num} group${num > 1 ? 's' : ''}.`;
+    }
+  };
+}
 const GENERATORS = { name: genName, equiv: genEquiv, simplify: genSimplify, like: genLike, related: genRelated };
 
 // ---------------------------------------------------------------
@@ -1469,6 +1599,388 @@ Return STRICT JSON only: {"help": "your explanation, 2-4 short sentences"}`;
   } finally {
     btn.disabled = false; btn.innerHTML = `🤖 AI Coach, help me understand!`;
   }
+}
+
+// =====================================================================
+// EXAM — pick the topics, sit a paper, write the workings, get it marked
+//   Questions come from the same generators as Practice, so every topic
+//   already knows its own answer, hints and marking.
+// =====================================================================
+const EXAM_CATS = [
+  { id: 'name',     emoji: '🍫', title: 'Name the fraction',           gen: genName },
+  { id: 'equiv',    emoji: '✂️', title: 'Equal fractions',             gen: genEquiv },
+  { id: 'simplify', emoji: '🧩', title: 'Simplify',                    gen: genSimplify },
+  { id: 'like',     emoji: '➕', title: 'Add & subtract (same pieces)', gen: genLike },
+  { id: 'related',  emoji: '🔧', title: 'Add & subtract (match first)', gen: genRelated },
+  { id: 'ofnum',    emoji: '🔢', title: 'Fraction of a number',        gen: genOfNumber },
+  { id: 'words',    emoji: '📚', title: 'Word problems (+ and −)',     gen: () => bankQuestion(pick(ADD_SUB_BANK)) },
+];
+const EXAM_SIZES = [5, 10, 15, 20];
+const examSetup = { cats: EXAM_CATS.map(c => c.id), size: 10 };
+let exam = null;   // { qs:[{cat,q,given,strokes,padOpen}], idx, submitted, results, score }
+
+function renderExamHome(){
+  $('view').innerHTML = `
+    <div class="card" style="text-align:center;">
+      <h2>📝 Exam</h2>
+      <p class="lede">Choose the topics to be tested and how many questions, then sit the paper. Nothing is marked until you press <b>Finish</b>.</p>
+    </div>
+    <div class="card">
+      <h3>1. Which topics?</h3>
+      <p class="lede">Tap a topic to put it in or leave it out.</p>
+      <div class="chip-row">
+        ${EXAM_CATS.map(c => `<button class="chip ${examSetup.cats.includes(c.id) ? 'active' : ''}" onclick="examToggleCat('${c.id}')">${c.emoji} ${c.title}</button>`).join('')}
+      </div>
+      <div class="btn-row" style="margin-top:4px;">
+        <button class="btn btn-ghost" onclick="examAllCats(true)">Select all</button>
+        <button class="btn btn-ghost" onclick="examAllCats(false)">Clear all</button>
+      </div>
+
+      <h3 style="margin-top:24px;">2. How many questions?</h3>
+      <div class="chip-row">
+        ${EXAM_SIZES.map(n => `<button class="chip ${n === examSetup.size ? 'active' : ''}" onclick="examSetSize(${n})">${n} questions</button>`).join('')}
+      </div>
+
+      <div class="idea"><b>✏️ Working area:</b> every question has a writing pad — tap <b>Working area</b> to open it and write with your finger. On an iPad, as soon as an Apple Pencil is used the pad switches over: the Pencil writes, fingers scroll the page, and a resting palm is ignored.</div>
+      <div class="btn-row">
+        <button class="btn btn-green" onclick="startExam()" ${examSetup.cats.length ? '' : 'disabled'}>Start the exam →</button>
+      </div>
+    </div>`;
+}
+function examToggleCat(id){
+  const i = examSetup.cats.indexOf(id);
+  if (i === -1) examSetup.cats.push(id); else examSetup.cats.splice(i, 1);
+  renderExamHome();
+}
+function examAllCats(on){
+  examSetup.cats = on ? EXAM_CATS.map(c => c.id) : [];
+  renderExamHome();
+}
+function examSetSize(n){ examSetup.size = n; renderExamHome(); }
+
+function startExam(){
+  const cats = EXAM_CATS.filter(c => examSetup.cats.includes(c.id));
+  if (!cats.length) { toast('Choose at least one topic first.'); return; }
+  const qs = [];
+  for (let i = 0; i < examSetup.size; i++) {
+    const c = cats[i % cats.length];              // spread the topics evenly
+    qs.push({ cat: c.id, q: c.gen(), given: {}, strokes: [], padOpen: false });
+  }
+  exam = { qs: shuffle(qs), idx: 0, submitted: false, results: null, score: 0, starred: false };
+  renderExamQ();
+}
+
+const examAnswered = (item) => Object.values(item.given || {}).some(v => String(v).trim() !== '');
+
+// Everything typed into the blanks is kept on the question itself, so moving
+// back and forth through the paper never loses an answer.
+function examCapture(){
+  if (!exam || exam.submitted) return;
+  const item = exam.qs[exam.idx];
+  if (!item) return;
+  Object.keys(item.q.answers).forEach(id => { const el = $(id); if (el) item.given[id] = el.value; });
+}
+function examRestore(item){
+  Object.keys(item.q.answers).forEach(id => { const el = $(id); if (el && item.given[id] != null) el.value = item.given[id]; });
+}
+function examGo(i){
+  examCapture();
+  exam.idx = Math.max(0, Math.min(exam.qs.length - 1, i));
+  renderExamQ();
+}
+function examNext(){ examGo(exam.idx + 1); }
+function examPrev(){ examGo(exam.idx - 1); }
+function quitExam(){
+  if (!window.confirm('Quit the exam? Your answers and workings will be lost.')) return;
+  exam = null;
+  renderExamHome();
+}
+
+function renderExamQ(){
+  const item = exam.qs[exam.idx];
+  const cat = EXAM_CATS.find(c => c.id === item.cat);
+  const n = exam.qs.length;
+  $('view').innerHTML = `
+    <div class="card">
+      <div class="exam-head">
+        <div>
+          <h2 style="margin:0;">📝 Question ${exam.idx + 1} <span style="color:var(--muted); font-size:1rem; font-weight:600;">of ${n}</span></h2>
+          <div class="exam-tag">${cat.emoji} ${cat.title}</div>
+        </div>
+        <button class="btn btn-ghost" onclick="quitExam()">✕ Quit</button>
+      </div>
+      <div class="exam-dots">
+        ${exam.qs.map((it, i) => `<button class="edot ${i === exam.idx ? 'active' : ''} ${examAnswered(it) ? 'done' : ''}" onclick="examGo(${i})">${i + 1}</button>`).join('')}
+      </div>
+      ${item.q.html}
+      ${workPadHtml(item)}
+      <div class="btn-row exam-nav">
+        <button class="btn btn-soft" onclick="examPrev()" ${exam.idx === 0 ? 'disabled' : ''}>← Back</button>
+        ${exam.idx < n - 1 ? `<button class="btn btn-green" onclick="examNext()">Next →</button>` : ''}
+        <button class="btn btn-blue" onclick="finishExam()">✅ Finish &amp; mark</button>
+      </div>
+    </div>`;
+  examRestore(item);
+  mountPad(item);
+  window.scrollTo({ top: 0 });
+}
+
+// ---------------------------------------------------------------
+// Working area — write the working with a finger or an Apple Pencil
+//   Strokes are stored as points in 0-1 space on the question itself, so
+//   they survive navigation, a rotation and a resize.
+// ---------------------------------------------------------------
+const PALM_CONTACT = 55;   // iPads report fingertips up to ~45px; above this is a palm
+const PAD_REF_W = 700;     // stroke widths are quoted at this pad width
+const padState = { tool: 'pen', item: null, canvas: null, ctx: null, stroke: null, activeId: null, pencilSeen: false };
+
+function workPadHtml(item){
+  return `
+    <div class="work">
+      <button class="btn btn-soft work-toggle" onclick="togglePad()">${item.padOpen ? '▼ Hide working area' : '✏️ Working area'}</button>
+      ${item.padOpen ? `
+        <div class="work-bar">
+          <button class="work-tool ${padState.tool === 'pen' ? 'active' : ''}" onclick="padTool('pen')" title="Pen">✏️</button>
+          <button class="work-tool ${padState.tool === 'eraser' ? 'active' : ''}" onclick="padTool('eraser')" title="Rub out">🧽</button>
+          <button class="work-tool" onclick="padUndo()" title="Undo the last stroke">↩</button>
+          <button class="work-tool" onclick="padClear()" title="Clear the whole pad">🗑</button>
+          <span class="work-hint" id="padHint">${padState.pencilSeen ? 'Pencil writes · fingers scroll' : 'Write your working here'}</span>
+        </div>
+        <div class="work-pad-wrap"><canvas class="work-pad${padState.pencilSeen ? ' stylus' : ''}" id="workPad"></canvas></div>` : ''}
+    </div>`;
+}
+function togglePad(){
+  const item = exam.qs[exam.idx];
+  examCapture();
+  item.padOpen = !item.padOpen;
+  renderExamQ();
+}
+function padTool(t){
+  padState.tool = t;
+  document.querySelectorAll('.work-tool').forEach(b => b.classList.remove('active'));
+  const which = t === 'pen' ? 0 : 1;
+  document.querySelectorAll('.work-tool')[which]?.classList.add('active');
+}
+function padUndo(){
+  if (!padState.item || !padState.item.strokes.length) return;
+  padState.item.strokes.pop();
+  padRedraw();
+}
+function padClear(){
+  if (!padState.item) return;
+  padState.item.strokes = [];
+  padRedraw();
+}
+
+function mountPad(item){
+  padState.item = item;
+  padState.canvas = null;
+  padState.ctx = null;
+  padState.stroke = null;
+  padState.activeId = null;
+  if (!item.padOpen) return;
+  const c = $('workPad');
+  if (!c) return;
+  padState.canvas = c;
+  padState.ctx = c.getContext('2d');
+  padSize();
+  c.addEventListener('pointerdown', padDown);
+  c.addEventListener('pointermove', padMove);
+  c.addEventListener('pointerup', padUp);
+  c.addEventListener('pointercancel', padUp);
+  // A capture dropped by the browser mid-stroke would otherwise leave the pad
+  // locked out for every later touch.
+  c.addEventListener('lostpointercapture', padUp);
+}
+
+function padSize(){
+  const c = padState.canvas;
+  if (!c) return;
+  const rect = c.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  c.width = Math.max(1, Math.round(rect.width * dpr));
+  c.height = Math.max(1, Math.round(rect.height * dpr));
+  padRedraw();
+}
+function drawStrokes(ctx, strokes, w, h){
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#243932';
+  (strokes || []).forEach(s => {
+    if (!s.pts.length) return;
+    ctx.lineWidth = Math.max(1, s.w * (w / PAD_REF_W));
+    ctx.beginPath();
+    ctx.moveTo(s.pts[0].x * w, s.pts[0].y * h);
+    if (s.pts.length === 1) ctx.lineTo(s.pts[0].x * w + 0.01, s.pts[0].y * h);
+    else for (let i = 1; i < s.pts.length; i++) ctx.lineTo(s.pts[i].x * w, s.pts[i].y * h);
+    ctx.stroke();
+  });
+}
+function padRedraw(){
+  const { canvas: c, ctx, item } = padState;
+  if (!c || !ctx) return;
+  ctx.clearRect(0, 0, c.width, c.height);
+  drawStrokes(ctx, item ? item.strokes : [], c.width, c.height);
+}
+function padPoint(e){
+  const r = padState.canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+}
+// Draw only the newest segment — redrawing every stroke on every move is what
+// makes handwriting stutter on an iPad.
+function padDrawSegment(a, b, width){
+  const { canvas: c, ctx } = padState;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#243932';
+  ctx.lineWidth = Math.max(1, width * (c.width / PAD_REF_W));
+  ctx.beginPath();
+  ctx.moveTo(a.x * c.width, a.y * c.height);
+  ctx.lineTo(b.x * c.width, b.y * c.height);
+  ctx.stroke();
+}
+function padErase(pt){
+  const item = padState.item;
+  const r = padState.canvas.getBoundingClientRect();
+  const rx = 16 / r.width, ry = 16 / r.height;          // ~16px finger-sized nib
+  const before = item.strokes.length;
+  item.strokes = item.strokes.filter(s =>
+    !s.pts.some(q => Math.abs(q.x - pt.x) < rx && Math.abs(q.y - pt.y) < ry));
+  if (item.strokes.length !== before) padRedraw();
+}
+function padDown(e){
+  // A palm-sized contact patch never starts anything.
+  if (e.pointerType === 'touch' && (e.width > PALM_CONTACT || e.height > PALM_CONTACT)) return;
+  // First time a stylus is used, hand the pad over to it: fingers go back to
+  // scrolling so a hand can rest on the screen.
+  if (e.pointerType === 'pen' && !padState.pencilSeen) {
+    padState.pencilSeen = true;
+    padState.canvas.classList.add('stylus');
+    const hint = $('padHint');
+    if (hint) hint.textContent = 'Pencil writes · fingers scroll';
+    toast('✏️ Apple Pencil detected — the Pencil writes, fingers scroll the page.');
+  }
+  if (padState.pencilSeen && e.pointerType === 'touch') return;
+  if (padState.activeId !== null && e.pointerId !== padState.activeId) return;  // second finger / palm
+  e.preventDefault();
+  padState.activeId = e.pointerId;
+  try { padState.canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  const pt = padPoint(e);
+  if (padState.tool === 'eraser') { padErase(pt); return; }
+  padState.stroke = { w: 2.6, pts: [pt] };
+  padState.item.strokes.push(padState.stroke);
+  padDrawSegment(pt, { x: pt.x + 0.0001, y: pt.y }, padState.stroke.w);
+}
+function padMove(e){
+  if (padState.activeId === null || e.pointerId !== padState.activeId) return;
+  e.preventDefault();
+  if (padState.tool === 'eraser') { padErase(padPoint(e)); return; }
+  const s = padState.stroke;
+  if (!s) return;
+  // An Apple Pencil samples far faster than pointermove fires; the extra
+  // samples only exist here, and dropping them is what makes quick
+  // handwriting come out angular.
+  let samples = (e.getCoalescedEvents && e.getCoalescedEvents()) || null;
+  if (!samples || !samples.length) samples = [e];
+  samples.forEach(se => {
+    const pt = padPoint(se);
+    const last = s.pts[s.pts.length - 1];
+    if (Math.abs(pt.x - last.x) + Math.abs(pt.y - last.y) < 0.0015) return;
+    s.pts.push(pt);
+    padDrawSegment(last, pt, s.w);
+  });
+}
+function padUp(e){
+  if (padState.activeId === null || (e && e.pointerId !== padState.activeId)) return;
+  padState.activeId = null;
+  padState.stroke = null;
+}
+
+// ---------------------------------------------------------------
+// Marking
+// ---------------------------------------------------------------
+function gradeAnswers(q, got){
+  let ok = true, anyEmpty = false;
+  for (const [id, want] of Object.entries(q.answers)) {
+    if (got[id] === null) { anyEmpty = true; ok = false; continue; }
+    if (got[id] !== want) ok = false;
+  }
+  if (!ok && !anyEmpty && q.acceptEquivalent && q.acceptEquivalent(got)) ok = true;
+  return ok;
+}
+function formatGiven(q, given){
+  const g = (id) => { const v = String(given[id] ?? '').trim(); return v === '' ? '—' : v; };
+  const ids = Object.keys(q.answers);
+  const parts = [];
+  if (ids.includes('bc')) parts.push(`step 1: ${g('bc')}`);
+  if (ids.includes('bn') && ids.includes('bd')) parts.push(`${g('bn')}/${g('bd')}`);
+  else ids.filter(id => id !== 'bc').forEach(id => parts.push(g(id)));
+  return parts.join(' · ');
+}
+// The working, drawn small enough to sit in the report.
+function workingThumb(strokes){
+  if (!strokes || !strokes.length) return '';
+  const w = 480, h = Math.round(w * 2 / 3);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, w, h);
+  drawStrokes(ctx, strokes, w, h);
+  return `<div class="res-work"><img src="${c.toDataURL('image/png')}" alt="Your working"></div>`;
+}
+
+function finishExam(){
+  examCapture();
+  const results = exam.qs.map(item => {
+    const got = {};
+    Object.keys(item.q.answers).forEach(id => {
+      const v = String(item.given[id] ?? '').trim();
+      got[id] = /^\d+$/.test(v) ? parseInt(v, 10) : null;
+    });
+    return { item, got, ok: gradeAnswers(item.q, got) };
+  });
+  exam.results = results;
+  exam.score = results.filter(r => r.ok).length;
+  exam.submitted = true;
+  if (!exam.starred) {
+    exam.starred = true;
+    if (exam.score) { addStars(exam.score, 'exam'); toast(`⭐ +${exam.score} star${exam.score > 1 ? 's' : ''}!`); }
+  }
+  renderExamResults();
+}
+
+function renderExamResults(){
+  const n = exam.qs.length, s = exam.score;
+  const pct = Math.round(s / n * 100);
+  const word = pct === 100 ? 'Perfect paper! 🎉' : pct >= 80 ? 'Really strong work! 🌟' :
+               pct >= 50 ? 'A good effort — look at the ones you missed.' : 'Keep going — check the topics below and try again.';
+  $('view').innerHTML = `
+    <div class="card" style="text-align:center;">
+      <h2>📝 Exam marked</h2>
+      <div class="res-score">${s} / ${n}</div>
+      <p class="lede" style="margin-top:6px;">${pct}% · ${word}</p>
+      <div class="btn-row">
+        <button class="btn btn-green" onclick="startExam()">🔁 Another paper (same topics)</button>
+        <button class="btn btn-ghost" onclick="goTab('exam')">← Change topics</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Every question</h3>
+      <p class="lede">Your answer, the right answer, and the working you wrote.</p>
+      ${exam.results.map((r, i) => {
+        const cat = EXAM_CATS.find(c => c.id === r.item.cat);
+        return `
+        <div class="res-item ${r.ok ? 'ok' : 'bad'}">
+          <div class="res-head">${r.ok ? '✅' : '❌'} Question ${i + 1}<span class="exam-tag">${cat.emoji} ${cat.title}</span></div>
+          <div class="res-q">${esc(r.item.q.text)}</div>
+          <div class="res-ans">You wrote: <b>${esc(formatGiven(r.item.q, r.item.given))}</b></div>
+          <div class="res-ans">${r.ok ? `Well done — ${esc(r.item.q.praise || 'correct!')}` : `Correct answer: <b>${esc(r.item.q.expected)}</b>`}</div>
+          ${workingThumb(r.item.strokes)}
+        </div>`;
+      }).join('')}
+    </div>`;
+  window.scrollTo({ top: 0 });
 }
 
 // =====================================================================
@@ -1663,6 +2175,45 @@ window.checkPractice = checkPractice;
 window.askCoach = askCoach;
 window.openExplain = openExplain;
 window.sendExplain = sendExplain;
+window.examToggleCat = examToggleCat;
+window.examAllCats = examAllCats;
+window.examSetSize = examSetSize;
+window.startExam = startExam;
+window.examGo = examGo;
+window.examNext = examNext;
+window.examPrev = examPrev;
+window.quitExam = quitExam;
+window.finishExam = finishExam;
+window.togglePad = togglePad;
+window.padTool = padTool;
+window.padUndo = padUndo;
+window.padClear = padClear;
+
+// iOS shrinks the *visual* viewport when the keyboard opens but never fires
+// `resize`, so anything sized in vh could end up behind the keyboard.
+if (window.visualViewport) {
+  const syncVVH = () => document.documentElement.style.setProperty('--vvh', window.visualViewport.height + 'px');
+  window.visualViewport.addEventListener('resize', syncVVH);
+  syncVVH();
+}
+// Rotating an iPad changes the pad's pixel size; strokes are stored in 0-1
+// space, so re-sizing the canvas and redrawing keeps the working intact.
+let resizeSettle = null;
+const onViewportResize = () => {
+  clearTimeout(resizeSettle);
+  resizeSettle = setTimeout(() => { if (padState.canvas) padSize(); }, 160);
+};
+window.addEventListener('resize', onViewportResize);
+window.addEventListener('orientationchange', onViewportResize);
+
+// The on-screen keyboard owns the bottom of the screen while a blank is being
+// filled in — see body.typing in the stylesheet.
+$('view').addEventListener('focusin', (e) => {
+  if (e.target.classList && e.target.classList.contains('blank')) document.body.classList.add('typing');
+});
+$('view').addEventListener('focusout', (e) => {
+  if (e.target.classList && e.target.classList.contains('blank')) document.body.classList.remove('typing');
+});
 
 // Any bar that appears anywhere — lesson, practice question, quick check,
 // "Teach the AI" picture — gets its cut animated as soon as it lands.
